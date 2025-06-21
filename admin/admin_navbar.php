@@ -1,5 +1,5 @@
 <?php
-require_once 'config/session.php';
+require_once '../config/session.php';
 $current_user = getCurrentUser();
 ?>
 

@@ -241,8 +241,8 @@ $stmt_users = $db->prepare($users_query);
 $stmt_users->execute();
 $users = $stmt_users->fetchAll(PDO::FETCH_ASSOC);
 
-include 'includes/admin_header.php'; // Menggunakan admin_header.php
-include 'includes/admin_navbar.php'; // Menggunakan admin_navbar.php
+include '../includes/header.php'; // Menggunakan admin_header.php
+include '../includes/admin_navbar.php'; // Menggunakan admin_header.php
 ?>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -605,4 +605,4 @@ include 'includes/admin_navbar.php'; // Menggunakan admin_navbar.php
     }
 </script>
 
-<?php include 'includes/admin_footer.php'; // Menggunakan admin_footer.php ?>
+<?php include '../includes/footer.php'; ?>
