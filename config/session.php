@@ -24,9 +24,25 @@ function getCurrentUser() {
     return null;
 }
 
-function logout() {
+function logout() { 
     session_destroy();
     header('Location: login.php');
     exit();
+}
+
+function isAdmin() {
+    $current_user = getCurrentUser();
+    return $current_user && isset($current_user['role']) && $current_user['role'] === 'admin';
+}
+
+function requireAdmin() {
+    if (!isLoggedIn()) {
+        header('Location: login.php');
+        exit();
+    }
+    if (!isAdmin()) {
+        header('Location: admin/admin_dashboard.php');
+        exit();
+    }
 }
 ?>

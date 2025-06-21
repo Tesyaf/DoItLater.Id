@@ -3,8 +3,13 @@ $page_title = 'Login';
 require_once 'config/database.php';
 require_once 'config/session.php';
 
+// Jika sudah login, cek role_sistem dan arahkan ke dashboard yang sesuai
 if (isLoggedIn()) {
-    header('Location: dashboard.php');
+    if (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin') {
+        header('Location: admin/admin_dashboard.php');
+    } else {
+        header('Location: dashboard.php');
+    }
     exit();
 }
 
@@ -20,18 +25,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $database = new Database();
         $db = $database->getConnection();
         
+        // Pastikan nama kolom 'role_sistem' sesuai dengan nama kolom di database Anda
         $query = "SELECT id_user, nama_lengkap, email, password, role_sistem FROM tbl_user WHERE email = ?";
         $stmt = $db->prepare($query);
         $stmt->execute([$email]);
         
         if ($user = $stmt->fetch(PDO::FETCH_ASSOC)) {
             if (password_verify($password, $user['password'])) {
+                // Set session variables
                 $_SESSION['user_id'] = $user['id_user'];
                 $_SESSION['user_nama'] = $user['nama_lengkap'];
                 $_SESSION['user_email'] = $user['email'];
-                $_SESSION['user_role'] = $user['role_sistem'];
-                
-                header('Location: dashboard.php');
+                $_SESSION['user_role'] = $user['role_sistem']; // Simpan role ke sesi
+
+                // Arahkan berdasarkan role_sistem
+                if ($user['role_sistem'] === 'admin') {
+                    header('Location: admin/admin_dashboard.php'); // Arahkan admin ke dashboard admin
+                } else {
+                    header('Location: dashboard.php'); // Arahkan pengguna biasa ke dashboard pengguna
+                }
                 exit();
             } else {
                 $error = 'Email atau password salah';

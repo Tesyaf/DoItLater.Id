@@ -9,31 +9,48 @@ $database = new Database();
 $db = $database->getConnection();
 $current_user = getCurrentUser();
 
-// Handle create new team
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['create_team'])) {
     $nama_team = trim($_POST['nama_team']);
     
     if (!empty($nama_team)) {
-        $query = "INSERT INTO tbl_team (nama_team, id_pembuat) VALUES (?, ?)";
-        $stmt = $db->prepare($query);
-        $stmt->execute([$nama_team, $current_user['id']]);
-        
+        try {
+            $db->beginTransaction();
+
+            $query_team = "INSERT INTO tbl_team (nama_team, id_pembuat) VALUES (?, ?)";
+            $stmt_team = $db->prepare($query_team);
+            $stmt_team->execute([$nama_team, $current_user['id']]);
+            $new_team_id = $db->lastInsertId();
+
+            $team_code = 'TEAM' . str_pad($new_team_id, 4, '0', STR_PAD_LEFT);
+            $query_code = "UPDATE tbl_team SET team_code = ? WHERE id_team = ?";
+            $stmt_code = $db->prepare($query_code);
+            $stmt_code->execute([$team_code, $new_team_id]);
+
+            $query_member = "INSERT INTO tbl_team_members (id_team, id_user, role_tim) VALUES (?, ?, 'owner')";
+            $stmt_member = $db->prepare($query_member);
+            $stmt_member->execute([$new_team_id, $current_user['id']]);
+
+            $db->commit();
+
+        } catch (Exception $e) {
+            $db->rollBack();
+        }
+
         header('Location: dashboard.php');
         exit();
     }
 }
 
-// Get teams where user is member
 $query = "SELECT DISTINCT t.*, u.nama_lengkap as pembuat_nama,
-          (SELECT COUNT(*) FROM tbl_ongoing WHERE id_team = t.id_team) as total_ongoing,
-          (SELECT COUNT(*) FROM tbl_done WHERE id_team = t.id_team) as total_done,
-          tm.role_tim,
-          t.team_code
-          FROM tbl_team t 
-          LEFT JOIN tbl_user u ON t.id_pembuat = u.id_user
-          INNER JOIN tbl_team_members tm ON t.id_team = tm.id_team
-          WHERE tm.id_user = ?
-          ORDER BY t.created_at DESC";
+                (SELECT COUNT(*) FROM tbl_ongoing WHERE id_team = t.id_team) as total_ongoing,
+                (SELECT COUNT(*) FROM tbl_done WHERE id_team = t.id_team) as total_done,
+                tm.role_tim,
+                t.team_code
+                FROM tbl_team t 
+                LEFT JOIN tbl_user u ON t.id_pembuat = u.id_user
+                INNER JOIN tbl_team_members tm ON t.id_team = tm.id_team
+                WHERE tm.id_user = ?
+                ORDER BY t.created_at DESC";
 $stmt = $db->prepare($query);
 $stmt->execute([$current_user['id']]);
 $teams = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -43,13 +60,11 @@ include 'includes/navbar.php';
 ?>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <!-- Header Section -->
     <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
         <p class="text-gray-600">Kelola tim dan tugas Anda dengan mudah</p>
     </div>
     
-    <!-- Create Team Section -->
     <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
         <h2 class="text-xl font-semibold text-gray-900 mb-4">Buat Tim Baru</h2>
         <form method="POST" class="flex gap-4">
@@ -71,7 +86,6 @@ include 'includes/navbar.php';
         </a>
     </div>
     
-    <!-- Teams Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <?php foreach ($teams as $team): ?>
         <div class="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
