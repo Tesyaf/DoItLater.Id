@@ -20,7 +20,7 @@ $current_user = getCurrentUser();
             <?php if ($current_user): ?>
             <div class="flex items-center space-x-4">
                 <span class="text-gray-700">Halo, <?php echo htmlspecialchars($current_user['nama']); ?></span>
-                <a href="../logout.php" class="bg-gradient-to-r from-red-500 to-pink-500 text-white px-4 py-2 rounded-lg hover:from-red-600 hover:to-pink-600 transition-all duration-200 font-medium">
+                <a href="logout.php" class="bg-gradient-to-r from-red-500 to-pink-500 text-white px-4 py-2 rounded-lg hover:from-red-600 hover:to-pink-600 transition-all duration-200 font-medium">
                     Logout
                 </a>
             </div>
