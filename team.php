@@ -40,6 +40,37 @@ $message_type = ''; // 'success' or 'error'
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (isset($_POST['update_task'])) {
+        $task_id = (int)$_POST['edit_task_id'];
+        $judul = trim($_POST['edit_judul_tugas']);
+        $deskripsi = trim($_POST['edit_deskripsi']);
+        $deadline = $_POST['edit_tanggal_deadline'];
+        $kategori = !empty($_POST['edit_id_kategori']) ? (int)$_POST['edit_id_kategori'] : null;
+        $penanggung_jawab = !empty($_POST['edit_id_penanggung_jawab']) ? (int)$_POST['edit_id_penanggung_jawab'] : null;
+    
+        if (!empty($judul)) {
+            try {
+                $query = "UPDATE tbl_ongoing 
+                          SET judul_tugas = ?, deskripsi = ?, tanggal_deadline = ?, id_kategori = ?, id_penanggung_jawab = ?
+                          WHERE id_tugas = ? AND id_team = ?";
+                $stmt = $db->prepare($query);
+                $stmt->execute([$judul, $deskripsi, $deadline, $kategori, $penanggung_jawab, $task_id, $team_id]);
+    
+                $message = "Tugas berhasil diperbarui!";
+                $message_type = "success";
+            } catch (PDOException $e) {
+                $message = "Gagal memperbarui tugas: " . $e->getMessage();
+                $message_type = "error";
+            }
+        } else {
+            $message = "Judul tugas tidak boleh kosong.";
+            $message_type = "error";
+        }
+    
+        header("Location: team.php?id=$team_id");
+        exit();
+    }
+     
     if (isset($_POST['add_task'])) {
         $judul = trim($_POST['judul_tugas']);
         $deskripsi = trim($_POST['deskripsi']);
@@ -94,6 +125,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $message = "Gagal menyelesaikan tugas: " . $e->getMessage();
             $message_type = "error";
         }
+        header("Location: team.php?id=$team_id");
+        exit();
     } elseif (isset($_POST['add_category'])) {
         $nama_kategori = trim($_POST['nama_kategori']);
 
@@ -112,8 +145,74 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $message = "Nama kategori tidak boleh kosong.";
             $message_type = "error";
         }
+    }elseif (isset($_POST['delete_category']) && isset($_POST['delete_kategori_id'])) {
+        $kategori_id = (int)$_POST['delete_kategori_id'];
+    
+        try {
+            // Optional: Check if any task is using this category first
+            $check_query = "SELECT COUNT(*) FROM tbl_ongoing WHERE id_kategori = ?";
+            $stmt_check = $db->prepare($check_query);
+            $stmt_check->execute([$kategori_id]);
+            $used_count = $stmt_check->fetchColumn();
+    
+            if ($used_count > 0) {
+                $message = "Kategori tidak dapat dihapus karena masih digunakan oleh tugas.";
+                $message_type = "error";
+            } else {
+                // Delete the category
+                $delete_query = "DELETE FROM tbl_kategori WHERE id_kategori = ? AND id_team = ?";
+                $stmt_delete = $db->prepare($delete_query);
+                $stmt_delete->execute([$kategori_id, $team_id]);
+    
+                $message = "Kategori berhasil dihapus!";
+                $message_type = "success";
+            }
+        } catch (PDOException $e) {
+            $message = "Gagal menghapus kategori: " . $e->getMessage();
+            $message_type = "error";
+        }    
+    }elseif (isset($_POST['edit_category']) && isset($_POST['edit_kategori_id'])) {
+        $kategori_id = (int)$_POST['edit_kategori_id'];
+        $new_name = trim($_POST['new_nama_kategori']);
+    
+        if (!empty($new_name)) {
+            try {
+                $query = "UPDATE tbl_kategori SET nama_kategori = ? WHERE id_kategori = ? AND id_team = ?";
+                $stmt = $db->prepare($query);
+                $stmt->execute([$new_name, $kategori_id, $team_id]);
+                $message = "Kategori berhasil diperbarui!";
+                $message_type = "success";
+            } catch (PDOException $e) {
+                $message = "Gagal memperbarui kategori: " . $e->getMessage();
+                $message_type = "error";
+            }
+        } else {
+            $message = "Nama kategori tidak boleh kosong.";
+            $message_type = "error";
+        }   
+    } elseif (isset($_POST['delete_task_id'])) {
+        $task_id = (int) $_POST['delete_task_id'];
+        $source = $_POST['source'] ?? 'ongoing'; // 'ongoing' or 'done'
+    
+        try {
+            if ($source === 'ongoing') {
+                $stmt = $db->prepare("DELETE FROM tbl_ongoing WHERE id_tugas = ? AND id_team = ?");
+            } else {
+                $stmt = $db->prepare("DELETE FROM tbl_done WHERE id_tugas_asli = ? AND id_team = ?");
+            }
+    
+            $stmt->execute([$task_id, $team_id]);
+            $message = "Tugas berhasil dihapus.";
+            $message_type = "success";
+        } catch (PDOException $e) {
+            $message = "Gagal menghapus tugas: " . $e->getMessage();
+            $message_type = "error";
+        }
+    
+        header("Location: team.php?id=$team_id");
+        exit();
     }
-    // --- OWNER-SPECIFIC LOGIC ---
+     // --- OWNER-SPECIFIC LOGIC ---
     elseif ($is_team_owner && isset($_POST['update_team_name'])) {
         $new_team_name = trim($_POST['new_nama_team']);
         if (!empty($new_team_name)) {
@@ -132,6 +231,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $message = "Nama tim tidak boleh kosong.";
             $message_type = "error";
         }
+        header("Location: team.php?id=$team_id");
+        exit();
     } elseif ($is_team_owner && isset($_POST['remove_member'])) {
         $member_id_to_remove = (int)$_POST['member_id_to_remove'];
         if ($member_id_to_remove === $current_user['id']) {
@@ -212,9 +313,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 error_log("Error adding member: " . $e->getMessage());
             }
         }
-    }
+    }  
     // --- END NEW LOGIC: Add Member by Email ---
-
     // Redirect to prevent form resubmission
     header("Location: team.php?id=$team_id");
     exit();
@@ -386,61 +486,92 @@ include 'includes/navbar.php';
     </div>
     <?php endif; ?>
 
-    <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
-        <h2 class="text-xl font-semibold text-gray-900 mb-4">Tambah Tugas Baru</h2>
-        <form method="POST" class="space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Judul Tugas</label>
-                    <input type="text" name="judul_tugas" required
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Deadline</label>
-                    <input type="date" name="tanggal_deadline"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                </div>
-            </div>
-
+<div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
+    <h2 class="text-xl font-semibold text-gray-900 mb-4">Tambah Tugas Baru</h2>
+    <form method="POST" class="space-y-4">
+        <!-- Grid Judul + Deadline -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Deskripsi</label>
-                <textarea name="deskripsi" rows="3"
-                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus->ring-purple-500 focus:border-transparent"></textarea>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Judul Tugas</label>
+                <input type="text" name="judul_tugas" required
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Deadline</label>
+                <input type="date" name="tanggal_deadline"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+            </div>
+        </div>
+
+        <!-- Deskripsi -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Deskripsi</label>
+            <textarea name="deskripsi" rows="3"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"></textarea>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Kategori -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Pilih Kategori</label>
+                <select id="kategoriSelect" name="id_kategori"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-2">
+                    <option value="">Pilih Kategori</option>
+                    <?php foreach ($categories as $category): ?>
+                    <option value="<?php echo $category['id_kategori']; ?>" data-nama="<?php echo htmlspecialchars($category['nama_kategori']); ?>">
+                        <?php echo htmlspecialchars($category['nama_kategori']); ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+
+                <!-- Tombol Aksi -->
+                <div class="flex gap-4 mb-2">
+                    <button type="button" onclick="showEditForm()" class="flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium">
+                        Edit
+                    </button>
+                    <button type="submit" name="delete_category" onclick="return confirm('Yakin ingin menghapus kategori ini?');"
+                        class="flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
+                        Hapus
+                    </button>
+                    <input type="hidden" name="delete_kategori_id" id="delete_kategori_id">
+                </div>
+
+                <!-- Form Edit -->
+                <div id="editForm" class="hidden mb-2">
+                    <input type="hidden" name="edit_kategori_id" id="edit_kategori_id">
+                    <label class="block text-sm text-gray-700 mb-1">Nama Baru:</label>
+                    <input type="text" name="new_nama_kategori" id="new_nama_kategori"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-2">
+                    <button type="submit" name="edit_category"
+                        class="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-2 rounded-lg hover:from-purple-600 hover:to-blue-600 font-medium">
+                        Simpan Perubahan
+                    </button>
+                </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Kategori</label>
-                    <select name="id_kategori"
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                        <option value="">Pilih Kategori</option>
-                        <?php foreach ($categories as $category): ?>
-                        <option value="<?php echo $category['id_kategori']; ?>">
-                            <?php echo htmlspecialchars($category['nama_kategori']); ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Penanggung Jawab</label>
-                    <select name="id_penanggung_jawab"
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                        <option value="">Pilih Penanggung Jawab</option>
-                        <?php foreach ($users_in_team as $user): // Use users_in_team here for the dropdown ?>
-                        <option value="<?php echo $user['id_user']; ?>">
-                            <?php echo htmlspecialchars($user['nama_lengkap']); ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+            <!-- Penanggung Jawab -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Penanggung Jawab</label>
+                <select name="id_penanggung_jawab"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    <option value="">Pilih Penanggung Jawab</option>
+                    <?php foreach ($users_in_team as $user): ?>
+                    <option value="<?php echo $user['id_user']; ?>">
+                        <?php echo htmlspecialchars($user['nama_lengkap']); ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
             </div>
+        </div>
 
-            <button type="submit" name="add_task"
-                    class="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-200 font-medium">
-                Tambah Tugas
-            </button>
-        </form>
-    </div>
+        <!-- Tombol Submit -->
+        <button type="submit" name="add_task"
+                class="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-200 font-medium">
+            Tambah Tugas
+        </button>
+    </form>
+</div>
+
 
     <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
         <h2 class="text-xl font-semibold text-gray-900 mb-4">Tambah Kategori Baru</h2>
@@ -531,10 +662,65 @@ include 'includes/navbar.php';
                     <form method="POST" class="inline">
                         <input type="hidden" name="task_id" value="<?php echo $task['id_tugas']; ?>">
                         <button type="submit" name="complete_task"
-                                class="bg-gradient-to-r from-green-500 to-teal-500 text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-teal-600 transition-all duration-200 text-sm font-medium">
+                                class="bg-gradient-to-r from-green-500 to-teal-500  text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-teal-600 transition-all duration-200 text-sm font-medium">
                             ✓ Tandai Selesai
                         </button>
-                    </form>
+                    </form><!-- Tombol Edit -->
+                        <button type="button"
+                                onclick="toggleEditForm(<?php echo $task['id_tugas']; ?>)"
+                                class="text-blue-500 hover:text-blue-700 text-sm font-medium mt-2">
+                              Edit
+                        </button>
+
+                        <form method="POST" class="inline-block ml-2" onsubmit="return confirm('Yakin ingin menghapus tugas ini?');">
+                            <input type="hidden" name="delete_task_id" value="<?php echo $task['id_tugas']; ?>">
+                            <button type="submit" class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                Hapus
+                            </button>
+                        </form>
+
+                        <!-- Edit Form (hidden by default) -->
+                        <form method="POST" id="edit-form-<?php echo $task['id_tugas']; ?>" class="mt-4 hidden space-y-3">
+                            <input type="hidden" name="edit_task_id" value="<?php echo $task['id_tugas']; ?>">
+
+                            <input type="text" name="edit_judul_tugas"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                value="<?php echo htmlspecialchars($task['judul_tugas']); ?>" required>
+
+                            <textarea name="edit_deskripsi"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg"><?php echo htmlspecialchars($task['deskripsi']); ?></textarea>
+
+                            <input type="date" name="edit_tanggal_deadline"
+                                value="<?php echo htmlspecialchars($task['tanggal_deadline']); ?>"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+
+                            <select name="edit_id_kategori"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                                <option value="">Pilih Kategori</option>
+                                <?php foreach ($categories as $category): ?>
+                                    <option value="<?php echo $category['id_kategori']; ?>"
+                                        <?php echo $task['id_kategori'] == $category['id_kategori'] ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($category['nama_kategori']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+
+                            <select name="edit_id_penanggung_jawab"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                                <option value="">Pilih Penanggung Jawab</option>
+                                <?php foreach ($users_in_team as $user): ?>
+                                    <option value="<?php echo $user['id_user']; ?>"
+                                        <?php echo $task['id_penanggung_jawab'] == $user['id_user'] ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($user['nama_lengkap']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+
+                            <button type="submit" name="update_task"
+                                class="bg-gradient-to-r from-green-500 to-teal-500  text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-teal-600 transition-all duration-200 text-sm font-medium">
+                                Simpan Perubahan
+                            </button>
+                        </form>
                 </div>
                 <?php endforeach; ?>
 
@@ -556,7 +742,9 @@ include 'includes/navbar.php';
             <div class="space-y-4">
                 <?php foreach ($done_tasks as $task): ?>
                 <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500 opacity-75">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-2"><?php echo htmlspecialchars($task['judul_tugas']); ?></h3>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">
+                        <?php echo htmlspecialchars($task['judul_tugas']); ?>
+                    </h3>
 
                     <div class="flex flex-wrap gap-2 mb-3">
                         <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
@@ -565,6 +753,17 @@ include 'includes/navbar.php';
                         <span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full">
                             <?php echo date('d M Y H:i', strtotime($task['tanggal_selesai'])); ?>
                         </span>
+                    </div>
+                    <!-- Tombol Aksi -->
+                    <div class="flex items-center gap-3 mb-3">
+                        <!-- Undo -->
+                        <form method="POST" class="inline-block ml-2" onsubmit="return confirm('Yakin ingin menghapus tugas ini?');">
+                            <input type="hidden" name="delete_task_id" value="<?php echo $task['id_tugas_asli']; ?>">
+                            <input type="hidden" name="source" value="done"> 
+                            <button type="submit" class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                Hapus
+                            </button>
+                        </form>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -576,6 +775,7 @@ include 'includes/navbar.php';
                 </div>
                 <?php endif; ?>
             </div>
+
         </div>
     </div>
 </div>
@@ -608,6 +808,36 @@ include 'includes/navbar.php';
     function closeEditTeamNameModal() {
         document.getElementById('editTeamNameModal').classList.add('hidden');
     }
+</script>
+
+<script>
+function showEditForm() {
+    const select = document.getElementById('kategoriSelect');
+    const selectedId = select.value;
+    const selectedName = select.options[select.selectedIndex].dataset.nama;
+
+    if (!selectedId) {
+        alert('Pilih kategori terlebih dahulu.');
+        return;
+    }
+
+    document.getElementById('edit_kategori_id').value = selectedId;
+    document.getElementById('new_nama_kategori').value = selectedName;
+    document.getElementById('editForm').classList.remove('hidden');
+}
+
+document.getElementById('kategoriSelect').addEventListener('change', function () {
+    const selectedId = this.value;
+    document.getElementById('delete_kategori_id').value = selectedId;
+    document.getElementById('editForm').classList.add('hidden'); // hide edit form when changing
+});
+</script>
+
+<script>
+function toggleEditForm(taskId) {
+    const form = document.getElementById('edit-form-' + taskId);
+    form.classList.toggle('hidden');
+}
 </script>
 
 <?php include 'includes/footer.php'; ?>
